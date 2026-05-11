@@ -1,0 +1,1196 @@
+/* MegaOke Web (WebOke) - DOM Edition Stylesheet */
+/* UPDATED:
+   - SCORING: Fixed and enhanced "glowing" and "shimmer" effects for icons.
+   - BRIDGE: Added #bg-video-snapshot for Zero-Black-Screen transitions.
+   - STACKING: Calibrated Z-Indexes (Video: 0, Bridge: 1, Ad-Layer: 2, UI: 10).
+   - ADS: "System Card" Layout (Logo Top, Body Middle, CTA Bottom).
+   - ADS: Strict Popup Positioning (Bottom Right Neon Box).
+   - LYRICS: Increased Stroke to 0.55vh for MAXIMUM boldness.
+   - SIZES: Preserved the +15% size increase for Title, Singer, and Idle Code.
+   - CONTROLS: Added styles for Ad Mute/Skip and Start Interaction Overlay.
+*/
+
+:root {
+    --bg-color: #000000;
+    --text-color: #ffffff;
+    --accent-color: #00e5ff;
+    --score-gold: #ffd700;
+    --setup-bg: rgba(0, 0, 100, 0.9);
+    --setup-highlight: #c8c832;
+    --setup-active: #ff3232;
+    --font-main: Arial, sans-serif;
+    --font-code: "Courier New", monospace;
+    /* Font Size Mappings - Strictly calibrated to 1080p Canvas */
+    /* SIZES: 15% larger than original base */
+    --fs-huge: 21.3vh; /* Controls "000000" Idle Code & Score */
+    --fs-big: 14.8vh; /* 160px */
+    --fs-meta: 12.8vh; /* Controls Song Title */
+    --fs-widget: 5.5vh; /* 60px */
+    --fs-lyric: 11.5vh;
+}
+
+body {
+    margin: 0;
+    padding: 0;
+    background-color: var(--bg-color);
+    color: var(--text-color);
+    font-family: var(--font-main);
+    overflow: hidden;
+    width: 100vw;
+    height: 100vh;
+    user-select: none;
+}
+
+#viewport {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: #000;
+    overflow: hidden;
+}
+
+#bg-video {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    z-index: 0;
+}
+
+/* --- THE BRIDGE: Zero Black Screen Canvas --- */
+#bg-video-snapshot, #snapshot-bridge {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    z-index: 1; /* Above raw video, below Ad Layer and UI */
+    display: none;
+    pointer-events: none;
+}
+
+/* --- ADVERTISING LAYER (Z: 2) --- */
+#ad-layer {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    z-index: 2; /* Sits above the video bridge */
+    pointer-events: none;
+}
+
+/* AD: Popup (In-Page Push) - Strict Bottom Right */
+/* Triggered on "Go" signal */
+#ad-center-popup {
+    position: absolute;
+    bottom: 8vh;
+    right: 5vw;
+    transform: none; /* Reset centering */
+
+    z-index: 2000; /* Very high to sit on top of video/ads */
+    pointer-events: auto;
+    /* Strict Constraints */
+    max-width: 400px;
+    max-height: 250px;
+    overflow: hidden; /* Clip unruly ads */
+    /* High-Tech Neon Aesthetic */
+    background: #000;
+    border: 0.3vh solid var(--accent-color);
+    box-shadow: 0 0 3vh var(--accent-color), inset 0 0 2vh rgba(0, 229, 255, 0.3);
+    /* Slide In Animation */
+    animation: popup-slide-in 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+@keyframes popup-slide-in {
+    from {
+        transform: translateX(120%);
+        opacity: 0;
+    }
+
+    to {
+        transform: translateX(0);
+        opacity: 1;
+    }
+}
+
+/* AD: Idle "Commercial Break" System Card */
+/* Replaces old loose banner with Broadcast-style Card */
+#ad-idle-banner.system-card {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    z-index: 6; /* Sits above standard ads */
+    pointer-events: auto;
+    /* Fixed Dimensions for Layout Safety */
+    width: 850px;
+    height: 550px;
+    display: flex;
+    flex-direction: column;
+    background: rgba(0, 0, 0, 0.95);
+    /* Aesthetic Double Border */
+    border: 0.6vh solid white;
+    outline: 0.4vh dashed var(--accent-color);
+    outline-offset: -1.2vh;
+    box-shadow: 0 0 15vh rgba(0, 0, 0, 0.9);
+}
+
+.card-header {
+    flex: 0 0 15%; /* Top Header */
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    /* Matches Main Logo Style */
+    font-size: 6vh;
+    font-weight: bold;
+    color: white;
+    -webkit-text-stroke: 0.25vh black;
+    paint-order: stroke fill;
+    letter-spacing: 0.2vw;
+    text-transform: uppercase;
+    background: linear-gradient(to bottom, #222, #000);
+    border-bottom: 0.4vh solid white;
+    text-shadow: 0 0 1vh var(--accent-color);
+}
+
+.card-body {
+    flex: 1; /* Flexible Middle */
+    width: 100%;
+    overflow: hidden; /* CRITICAL: Clips ad overflow */
+    position: relative;
+    background: #050505;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 2vh;
+    padding: 1vh 0;
+}
+
+/* Ensure injected ads don't break flex layout */
+#ad-idle-728, #ad-idle-300 {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    max-width: 100%;
+}
+
+.card-footer {
+    flex: 0 0 12%; /* Bottom CTA */
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    font-size: 4vh;
+    font-weight: bold;
+    color: yellow;
+    -webkit-text-stroke: 0.1vh black;
+    paint-order: stroke fill;
+    text-transform: uppercase;
+    background: #111;
+    border-top: 0.4vh solid white;
+    animation: cta-pulse 1.5s infinite ease-in-out;
+}
+
+@keyframes cta-pulse {
+    0% {
+        transform: scale(1);
+        text-shadow: 0 0 0 transparent;
+        color: yellow;
+    }
+
+    50% {
+        transform: scale(1.02);
+        text-shadow: 0 0 2vh orange;
+        color: #fff;
+    }
+
+    100% {
+        transform: scale(1);
+        text-shadow: 0 0 0 transparent;
+        color: yellow;
+    }
+}
+
+/* --- RESPONSIVE ADS (Mobile Safety) --- */
+@media screen and (max-width: 1000px) {
+    /* Scale the System Card for tablets/mobiles */
+    #ad-idle-banner.system-card {
+        width: 90vw;
+        height: 60vh;
+    }
+
+    .card-header {
+        font-size: 4vh;
+    }
+
+    .card-footer {
+        font-size: 3vh;
+    }
+
+    #ad-center-popup {
+        transform: scale(0.7);
+        right: 0;
+        bottom: 15vh;
+    }
+}
+
+@media screen and (max-width: 600px) {
+    #ad-idle-banner.system-card {
+        width: 95vw;
+        height: 50vh;
+        outline-offset: -0.8vh;
+    }
+
+    #ad-center-popup {
+        transform: scale(0.6);
+        right: -5vw;
+    }
+}
+
+/* --- UI LAYER (Z: 10) --- */
+#ui-layer {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    z-index: 10;
+    pointer-events: none;
+}
+
+.hidden {
+    display: none !important;
+}
+
+.active {
+    display: block !important;
+}
+
+/* --- WIDGETS (Z: 15) --- */
+.ui-widget {
+    position: absolute;
+    z-index: 15;
+    pointer-events: auto;
+    font-family: var(--font-main);
+    font-weight: bold;
+    font-size: var(--fs-widget);
+    text-align: left;
+    white-space: pre;
+    line-height: 1;
+}
+
+/* Widget: Queue */
+#widget-queue {
+    top: 5.5vh;
+    left: 3.1vw;
+    display: flex;
+    align-items: center;
+    margin: 0;
+    padding: 0;
+}
+
+.queue-row {
+    display: flex;
+    align-items: center;
+    gap: 1vw;
+}
+
+#queue-count {
+    color: yellow;
+    -webkit-text-stroke: 0.1vh black;
+    paint-order: stroke fill;
+}
+
+#queue-list-text {
+    display: flex;
+    gap: 1.5vw;
+    margin-left: 2vw;
+}
+
+.q-code {
+    font-family: var(--font-main);
+    color: white;
+    -webkit-text-stroke: 0.1vh black;
+    paint-order: stroke fill;
+}
+
+    .q-code.playing {
+        color: red;
+    }
+
+/* Widget: Input */
+#widget-input {
+    top: 11.5vh;
+    left: 3.1vw;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    align-items: center;
+}
+
+#input-display {
+    color: var(--accent-color);
+    -webkit-text-stroke: 0.1vh black;
+    paint-order: stroke fill;
+}
+
+/* --- SCREENS (Z: 10) --- */
+.ui-screen {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    display: none;
+    z-index: 10;
+}
+
+/* Screen: IDLE */
+#screen-idle {
+    display: none;
+    text-align: center;
+}
+
+.idle-content {
+    position: absolute;
+    width: 100%;
+    height: 100%;
+}
+
+.idle-text {
+    position: absolute;
+    top: 38%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    font-size: var(--fs-big);
+    font-weight: bold;
+    color: white;
+    -webkit-text-stroke: 0.4vh black;
+    paint-order: stroke fill;
+    white-space: nowrap;
+}
+
+.idle-code {
+    position: absolute;
+    top: 60%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    font-family: var(--font-code);
+    font-size: var(--fs-huge); /* 21.3vh */
+    font-weight: bold;
+    color: var(--accent-color);
+    -webkit-text-stroke: 0.5vh black;
+    paint-order: stroke fill;
+}
+
+.idle-sub-container {
+    position: absolute;
+    top: 82%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 90%;
+    height: 25%;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    overflow: hidden;
+}
+
+.idle-sub {
+    font-weight: bold;
+    color: yellow;
+    -webkit-text-stroke: 0.25vh black;
+    paint-order: stroke fill;
+    text-align: center;
+    line-height: 1.2;
+}
+
+/* --- NEW SONGS --- */
+.ns-box {
+    position: absolute;
+    top: 11.5vh;
+    left: 4vw;
+    right: 4vw;
+    bottom: 7.5vh;
+    background: rgba(0, 0, 0, 0.85);
+    border: 0.4vh solid white;
+    display: flex;
+    flex-direction: column;
+    padding: 2vh 4vh;
+    margin-bottom: 2vh;
+}
+
+.ns-header {
+    font-size: 4vh;
+    font-weight: bold;
+    color: white;
+    padding-bottom: 2vh;
+    margin-bottom: 2vh;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    border-bottom: 0.2vh solid #555;
+}
+
+.ns-title {
+    color: yellow;
+    -webkit-text-stroke: 0.1vh black;
+    paint-order: stroke fill;
+}
+
+.ns-body {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    overflow-y: hidden;
+}
+
+/* Dynamic Rows */
+.ns-row {
+    display: flex;
+    justify-content: space-between;
+    font-size: 3.5vh;
+    font-weight: bold;
+    padding: 1vh 2vh;
+    color: yellow;
+    -webkit-text-stroke: 0.1vh black;
+    paint-order: stroke fill;
+}
+
+    .ns-row.even, .ns-row.odd {
+        color: yellow;
+    }
+
+.col-code {
+    width: 12vw;
+    text-align: left;
+    color: inherit;
+    -webkit-text-stroke: inherit;
+    paint-order: stroke fill;
+}
+
+.col-title {
+    flex: 1;
+    text-align: left;
+    margin-left: 2vw;
+    color: white !important;
+    -webkit-text-stroke: inherit;
+    paint-order: stroke fill;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.col-artist {
+    width: 30vw;
+    text-align: left;
+    color: #69f0ae !important;
+    -webkit-text-stroke: 0.1vh black;
+    paint-order: stroke fill;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    padding-left: 1vw;
+}
+
+/* Screen: SCORE */
+#screen-score {
+    background: rgba(0, 0, 0, 0.8);
+}
+
+.score-container {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 80%;
+    height: 60%;
+    border: 1.2vh solid gold;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+}
+
+.score-val {
+    font-size: var(--fs-huge); /* 21.3vh */
+    font-weight: bold;
+    color: yellow;
+    -webkit-text-stroke: 1vh black;
+    paint-order: stroke fill;
+    margin-bottom: 0;
+}
+
+#score-icons {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 1vw;
+    margin-top: 1vh;
+    margin-bottom: 2vh;
+    min-height: 8vh;
+}
+
+.s-icon {
+    font-size: 6vh;
+    line-height: 1;
+    -webkit-text-stroke: 0.1vh black;
+    paint-order: stroke fill;
+    transition: all 0.2s ease-out;
+}
+
+    .s-icon.gray {
+        color: #666;
+        filter: grayscale(100%);
+    }
+
+    .s-icon.gold {
+        color: var(--score-gold);
+    }
+
+    /* FIX: Enhanced Glowing State */
+    .s-icon.glowing {
+        color: var(--score-gold);
+        /* Deep, multi-layered glow: White -> Gold -> Dark Orange -> Red */
+        text-shadow: 0 0 0.5vh #fff, 0 0 1.5vh #ffd700, 0 0 3vh #ff8c00, 0 0 5vh #ff4500;
+    }
+
+    /* FIX: Enhanced Shimmer Animation */
+    .s-icon.shimmer {
+        color: var(--score-gold);
+        animation: score-shimmer 0.6s infinite alternate cubic-bezier(0.4, 0, 0.2, 1);
+    }
+
+@keyframes score-shimmer {
+    0% {
+        transform: scale(1);
+        color: #ffd700;
+        text-shadow: 0 0 1vh #ffd700, 0 0 2vh #ff8c00;
+    }
+
+    100% {
+        transform: scale(1.15);
+        color: #fff; /* White hot */
+        text-shadow: 0 0 2vh #fff, 0 0 4vh #ffd700, 0 0 6vh #ff8c00, 0 0 8vh #ff0000;
+    }
+}
+
+.score-msg {
+    font-size: 7vh;
+    font-weight: bold;
+    color: var(--accent-color);
+    -webkit-text-stroke: 0.4vh black;
+    paint-order: stroke fill;
+    margin-top: 2vh;
+}
+
+/* Screen: RANKING */
+.ranking-container {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 70%;
+    height: 75%;
+    background: rgba(0, 0, 0, 0.9);
+    border: 0.8vh solid gold;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 2vh;
+}
+
+.ranking-header {
+    font-size: 5vh;
+    font-weight: bold;
+    color: white;
+    margin-bottom: 4vh;
+}
+
+.ranking-item {
+    font-size: 4vh;
+    font-weight: bold;
+    color: yellow;
+    -webkit-text-stroke: 0.1vh black;
+    paint-order: stroke fill;
+    margin: 1vh 0;
+}
+
+/* Screen: SETUP (Z: 2001) */
+.setup-layout {
+    position: absolute;
+    top: 12.5%;
+    left: 12.5%;
+    width: 75%;
+    height: 75%;
+    background: var(--setup-bg);
+    border: 0.4vh solid var(--accent-color);
+    display: flex;
+    outline: 1.2vh solid var(--accent-color);
+    outline-offset: -1.2vh;
+    z-index: 2001;
+}
+
+.setup-col {
+    flex: 1;
+    padding: 4vh;
+    display: flex;
+    flex-direction: column;
+    gap: 1vh;
+}
+
+    .setup-col.left {
+        border-right: 2px solid rgba(0, 255, 255, 0.4);
+    }
+
+.setup-item {
+    font-size: 3.5vh;
+    font-weight: bold;
+    padding: 0.5vh 1vw;
+    color: white;
+    cursor: pointer;
+}
+
+    .setup-item.selected {
+        background: var(--setup-highlight);
+        color: black;
+    }
+
+    .setup-item.active-col {
+        background: var(--setup-active);
+        color: black;
+    }
+
+.setup-opt-item {
+    font-size: 3.5vh;
+    padding: 0.5vh 1vw;
+    color: white;
+    display: flex;
+    align-items: center;
+}
+
+    .setup-opt-item.highlight {
+        background: yellow;
+        color: black;
+    }
+
+    .setup-opt-item.current {
+        color: #00ff00;
+    }
+
+/* Screen: SEARCH (Z: 2000) */
+#screen-search {
+    background: transparent;
+    z-index: 2000;
+}
+
+.search-box {
+    position: absolute;
+    top: 11.5vh;
+    left: 4vw;
+    right: 4vw;
+    background: rgba(0, 0, 0, 0.85);
+    border: 0.4vh solid white;
+    display: flex;
+    flex-direction: column;
+    padding: 2vh 4vh;
+    bottom: 7.5vh;
+    margin-bottom: 2vh;
+    transition: bottom 0.3s ease;
+}
+
+    .search-box.playing-mode {
+        bottom: 30vh;
+    }
+
+.search-header {
+    font-size: 4vh;
+    font-weight: bold;
+    color: white;
+    padding-bottom: 2vh;
+    margin-bottom: 2vh;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-bottom: 0.2vh solid #555;
+}
+
+#search-input {
+    order: 2;
+    width: 30%;
+}
+
+.search-bar-styled {
+    display: flex;
+    align-items: center;
+    background: #333;
+    border: 0.3vh solid white;
+    border-radius: 1vh;
+    padding: 1vh 2vh;
+    width: 100%;
+    box-sizing: border-box;
+    overflow: hidden;
+}
+
+.search-text {
+    font-family: var(--font-main);
+    color: var(--accent-color);
+    font-size: 4vh;
+    -webkit-text-stroke: 0.1vh black;
+    paint-order: stroke fill;
+    padding-left: 0.5vw;
+    padding-right: 1vw;
+    width: 100%;
+    white-space: nowrap;
+    overflow: hidden;
+}
+
+#search-count {
+    color: yellow;
+    -webkit-text-stroke: 0.1vh black;
+    paint-order: stroke fill;
+    font-size: 3.5vh;
+    order: 1;
+}
+
+.search-results-wrapper {
+    flex: 1;
+    overflow-y: hidden;
+    position: relative;
+    margin-top: 1vh;
+}
+
+#search-results {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    width: 100%;
+}
+
+.search-row {
+    display: flex;
+    justify-content: space-between;
+    font-size: 3.5vh;
+    font-weight: bold;
+    padding: 1vh 2vh;
+    color: yellow;
+    -webkit-text-stroke: 0.1vh black;
+    paint-order: stroke fill;
+}
+
+    .search-row.selected {
+        background: #b71c1c;
+        color: white;
+        border: 0.2vh solid white;
+    }
+
+    .search-row .sr-code {
+        width: 12vw;
+        text-align: left;
+        color: inherit;
+        -webkit-text-stroke: inherit;
+        paint-order: stroke fill;
+    }
+
+    .search-row .sr-title {
+        flex: 1;
+        text-align: left;
+        margin-left: 2vw;
+        color: inherit;
+        -webkit-text-stroke: inherit;
+        paint-order: stroke fill;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
+    .search-row .sr-artist {
+        width: 30vw;
+        text-align: left;
+        color: #69f0ae;
+        -webkit-text-stroke: 0.1vh black;
+        paint-order: stroke fill;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        padding-left: 1vw;
+    }
+
+    .search-row.selected .sr-artist {
+        color: white;
+    }
+
+/* --- OVERLAYS --- */
+#overlay-metadata {
+    position: absolute;
+    top: 30%;
+    left: 0;
+    width: 100%;
+    text-align: center;
+    pointer-events: none;
+    display: flex;
+    flex-direction: column;
+    gap: 5vh;
+}
+
+.meta-title {
+    font-size: var(--fs-meta); /* 12.8vh */
+    font-weight: bold;
+    color: var(--accent-color);
+    -webkit-text-stroke: 0.25vh black;
+    paint-order: stroke fill;
+    line-height: 1.2;
+    padding: 0 5vw;
+}
+
+.meta-singer {
+    font-size: 10.4vh; /* 15% bigger than original 9vh */
+    font-weight: bold;
+    color: white;
+    -webkit-text-stroke: 0.2vh black;
+    paint-order: stroke fill;
+}
+
+.meta-credits {
+    position: absolute;
+    top: 50vh;
+    width: 100%;
+    font-size: 4.5vh;
+    font-weight: bold;
+    color: #ddd;
+    -webkit-text-stroke: 0.1vh black;
+    paint-order: stroke fill;
+}
+
+#overlay-countdown {
+    position: absolute;
+    top: 40%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    text-align: center;
+    white-space: nowrap;
+}
+
+.cd-number {
+    font-size: 23vh;
+    font-weight: bold;
+    -webkit-text-stroke: 1vh black;
+    paint-order: stroke fill;
+}
+
+.cd-text {
+    font-size: 7.5vh;
+    font-weight: bold;
+    color: #00ffff;
+    -webkit-text-stroke: 0.4vh black;
+    paint-order: stroke fill;
+}
+
+#overlay-status {
+    position: absolute;
+    top: 9vh;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 42vw;
+    height: 7.5vh;
+    background: rgba(0,0,0,0.8);
+    border: 0.3vh solid white;
+    display: flex;
+    align-items: center;
+    padding: 0 1.5vw;
+    box-sizing: border-box;
+}
+
+.status-label {
+    font-size: 3.7vh;
+    font-weight: bold;
+    color: white;
+    margin-right: 1.5vw;
+    min-width: 13vw;
+}
+
+.status-bar-bg {
+    flex: 1;
+    height: 3.7vh;
+    background: #333;
+    position: relative;
+}
+
+.status-bar-fill {
+    height: 100%;
+    background: cyan;
+    width: 50%;
+}
+
+#overlay-paused {
+    position: absolute;
+    top: 5.5vh;
+    left: 3.1vw;
+    z-index: 20;
+}
+
+.pause-box {
+    background: rgba(200, 0, 0, 0.8);
+    color: white;
+    font-size: var(--fs-widget);
+    font-weight: bold;
+    padding: 1vh 2vw;
+    text-align: center;
+}
+
+/* --- LAYER 3: LYRICS (Z: 20) --- */
+#lyrics-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    z-index: 20;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-end;
+    align-items: center;
+    pointer-events: none;
+    padding-bottom: 4vh;
+    box-sizing: border-box;
+}
+
+@media screen and (max-width: 1000px) {
+    #lyrics-overlay {
+        padding-bottom: 3vh;
+    }
+}
+
+.lyric-line {
+    width: 95%;
+    text-align: center;
+    font-family: "Segoe UI", "Arial Black", sans-serif;
+    font-weight: 900;
+    font-size: var(--fs-lyric);
+    line-height: 1.2;
+    white-space: pre;
+    margin: 0vh 0;
+    min-height: 1.2em;
+    display: block;
+    /* UPDATED: Increased stroke from 0.35vh to 0.55vh */
+    -webkit-text-stroke: 0.55vh #000;
+    paint-order: stroke fill;
+    color: white;
+    transition: none;
+}
+
+.syllable {
+    display: inline-block;
+    position: relative;
+    padding: 0;
+}
+
+    .syllable .base-text {
+        visibility: visible;
+        z-index: 1;
+        /* UPDATED: Increased stroke from 0.35vh to 0.55vh */
+        -webkit-text-stroke: 0.55vh #000;
+        paint-order: stroke fill;
+        color: white;
+    }
+
+    .syllable .fill {
+        position: absolute;
+        top: -20%;
+        left: 0;
+        height: 140%;
+        width: 0%;
+        overflow: hidden;
+        white-space: pre;
+        z-index: 2;
+        /* UPDATED: Increased stroke from 0.35vh to 0.55vh */
+        /* Note: Inner stroke remains #fff for the glowing text effect, 
+           or you can switch to #000 if you want a dark border on blue text too */
+        -webkit-text-stroke: 0.55vh #fff;
+        paint-order: stroke fill;
+        color: #00e5ff;
+        display: flex;
+        align-items: center;
+    }
+
+/* --- Startup Overlay (Z: 100) --- */
+#startup-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.95);
+    z-index: 100;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    backdrop-filter: blur(5px);
+}
+
+.loader-box {
+    width: 500px;
+    background: #1a1a1a;
+    border: 2px solid #444;
+    border-radius: 10px;
+    padding: 40px;
+    box-shadow: 0 0 30px rgba(0, 0, 0, 0.8);
+    text-align: center;
+    color: white;
+}
+
+.glow-text {
+    font-size: 48px;
+    color: white;
+    text-shadow: 0 0 10px var(--accent-color);
+    margin: 0;
+}
+
+.subtitle {
+    font-size: 18px;
+    color: #aaa;
+    margin: 10px 0 30px;
+}
+
+.status-message {
+    color: var(--accent-color);
+    margin-bottom: 20px;
+    font-weight: bold;
+}
+
+.progress-container {
+    width: 100%;
+    height: 10px;
+    background: #333;
+    margin: 25px 0;
+    border-radius: 5px;
+    overflow: hidden;
+}
+
+#progress-bar {
+    width: 0%;
+    height: 100%;
+    background: var(--accent-color);
+    transition: width 0.3s ease;
+}
+
+#btn-launch {
+    width: 100%;
+    padding: 12px;
+    background: linear-gradient(135deg, #006064 0%, #00acc1 100%);
+    color: white;
+    border: none;
+    font-weight: bold;
+    cursor: pointer;
+    border-radius: 5px;
+    font-size: 16px;
+}
+
+    #btn-launch[disabled] {
+        opacity: 0.5;
+        cursor: default;
+    }
+
+/* --- ADVERTISING CONTROLS (New - Injected by Painter) --- */
+#ad-unmute-btn {
+    position: fixed;
+    bottom: 20px;
+    right: 20px;
+    background: rgba(0, 0, 0, 0.8);
+    color: white;
+    padding: 12px 20px;
+    border-radius: 30px;
+    font-family: var(--font-main);
+    font-weight: bold;
+    font-size: 14px;
+    display: none; /* Toggled by Painter */
+    align-items: center;
+    gap: 10px;
+    cursor: pointer;
+    z-index: 99999;
+    border: 1px solid rgba(255, 255, 255, 0.3);
+    transition: transform 0.2s;
+}
+
+    #ad-unmute-btn:hover {
+        transform: scale(1.05);
+    }
+
+#ad-skip-btn {
+    position: fixed;
+    bottom: 75px;
+    right: 20px;
+    background: rgba(0, 0, 0, 0.85);
+    color: white;
+    padding: 12px 25px;
+    border-radius: 6px;
+    font-family: var(--font-main);
+    font-weight: bold;
+    font-size: 16px;
+    display: none; /* Toggled by Painter */
+    align-items: center;
+    justify-content: center;
+    z-index: 99999;
+    border: 1px solid rgba(255, 255, 255, 0.4);
+    transition: all 0.2s;
+    min-width: 120px;
+    pointer-events: auto; /* Ensure clickable */
+}
+
+    #ad-skip-btn.skippable {
+        cursor: pointer;
+        background: rgba(0, 180, 255, 0.9);
+        border-color: #fff;
+    }
+
+/* --- INTERACTION OVERLAYS (New - Start Button) --- */
+#start-interaction-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.85);
+    z-index: 99999;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    backdrop-filter: blur(5px);
+}
+
+.start-box {
+    background: rgba(0, 0, 0, 0.6);
+    border: 2px solid var(--accent-color);
+    padding: 40px;
+    border-radius: 20px;
+    text-align: center;
+    box-shadow: 0 0 50px rgba(0, 229, 255, 0.3);
+}
+
+#btn-enter-karaoke {
+    background: var(--accent-color);
+    color: black;
+    border: none;
+    padding: 20px 50px;
+    font-size: 24px;
+    font-weight: bold;
+    border-radius: 50px;
+    cursor: pointer;
+    transition: transform 0.2s, box-shadow 0.2s;
+    font-family: sans-serif;
+    box-shadow: 0 0 20px rgba(0, 229, 255, 0.5);
+    outline: none;
+    margin-top: 20px;
+}
+
+    #btn-enter-karaoke:hover, #btn-enter-karaoke:focus {
+        transform: scale(1.05);
+        box-shadow: 0 0 40px rgba(0, 229, 255, 0.8);
+    }
