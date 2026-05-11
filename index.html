@@ -1,0 +1,2082 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+
+    <meta name="description" content="TYF MegaOke Free Karaoke Player. The best place for libreng videoke in the Philippines. Huge collection of songs, no need to install anything (walang download). Just play and sing!">
+    <meta name="keywords" content="TYF MegaOke, free karaoke player, philippines karaoke, libreng videoke, videoke online, opm karaoke, walang bayad, karaoke no install, web karaoke">
+    <meta name="author" content="TYF MegaOke">
+
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="theme-color" content="#000000">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+
+    <title>MegaOke Mobile Theatre</title>
+
+    <script>window.__MOBILE_THEATRE__ = true;</script>
+
+    <script type="importmap">
+        { "imports": { "spessasynth_core": "./js/spessasynth_core.js" } }
+    </script>
+
+    <script src="js/pako.min.js"></script>
+    <script src="js/jzz.js"></script>
+    <script src="js/jzz-midi-smf.js"></script>
+    <script src="js/jzz-synth-tiny.js"></script>
+
+    <link rel="stylesheet" href="style.css">
+
+    <style>
+        /* --- CORE LAYOUT --- */
+        html, body {
+            margin: 0;
+            padding: 0;
+            background: #000;
+            height: 100%;
+            width: 100%;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column; /* Default Portrait: Column */
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            overscroll-behavior: none;
+            /* DISABLE SELECTION FOR FASTER UI */
+            -webkit-user-select: none;
+            user-select: none;
+            -webkit-touch-callout: none;
+        }
+
+        /* --- THEATRE SECTION (Top/Left) --- */
+        #theatre-container {
+            position: relative;
+            width: 100%;
+            flex-grow: 0;
+            flex-shrink: 0;
+            background: #000;
+            overflow: hidden;
+            border-bottom: 2px solid #333;
+            transition: all 0.3s cubic-bezier(0.25, 1, 0.5, 1);
+            z-index: 10;
+        }
+
+        /* The canvas that holds video + lyrics */
+        #viewport {
+            width: 1280px !important;
+            height: 720px !important;
+            position: absolute;
+            top: 0;
+            left: 0;
+            transform-origin: 0 0;
+            background: #000;
+            overflow: hidden;
+        }
+
+        #bg-video {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        /* --- FLOATING UI BUTTONS --- */
+
+        .float-btn {
+            position: absolute;
+            width: 40px;
+            height: 40px;
+            background: rgba(0, 0, 0, 0.6); /* Slightly darker, no blur */
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            border-radius: 8px;
+            color: #fff;
+            font-size: 20px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 100;
+            cursor: pointer;
+            transition: background 0.2s, top 0.3s ease;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+            .float-btn:active {
+                background: #00e5ff;
+                color: #000;
+            }
+
+        /* Hamburger Menu */
+        #btn-toggle-menu {
+            top: 10px;
+            right: 10px;
+            display: none; /* Hidden by default (Portrait) */
+        }
+
+        /* Fullscreen button positioning */
+        #btn-toggle-fs {
+            top: 10px;
+            right: 10px;
+        }
+
+        /* In landscape immersive, move fs button down */
+        body.immersive-mode.is-landscape #btn-toggle-fs {
+            top: 60px;
+        }
+
+        /* --- CONTROLS SECTION (Bottom/Right) --- */
+        #controls-container {
+            flex: 1; /* Fill remaining space */
+            background: #121212;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            position: relative;
+            z-index: 50; /* Higher than theatre in some cases */
+            width: 100%;
+            transition: transform 0.3s cubic-bezier(0.25, 1, 0.5, 1), width 0.3s ease;
+            box-shadow: -5px 0 15px rgba(0,0,0,0.5);
+        }
+
+        /* --- IMMERSIVE MODE LOGIC (GLOBAL / PORTRAIT) --- */
+        /* In Portrait, Immersive Mode just removes borders but keeps Standard Layout */
+        body.immersive-mode #theatre-container {
+            border: none;
+            /* Layout remains handled by JS scaleTheatre() and Flexbox */
+        }
+
+        body.immersive-mode #btn-toggle-menu {
+            display: none; /* FORCE HIDDEN IN PORTRAIT */
+        }
+
+        body.immersive-mode #controls-container {
+            position: relative; /* Keep in flow */
+            transform: none;
+            width: 100%;
+            top: auto;
+            right: auto;
+            bottom: auto;
+        }
+
+        /* Close button inside controls (Hidden in Portrait) */
+        #btn-close-menu {
+            display: none;
+            width: 40px;
+            background: none;
+            border: none;
+            color: #ff5555;
+            font-size: 24px;
+            font-weight: bold;
+        }
+
+        /* --- AD LAYER FIXES --- */
+        #ad-center-popup {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            z-index: 2000;
+            max-width: 90%;
+            max-height: 90%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+            #ad-center-popup.hidden {
+                display: none !important;
+            }
+
+        /* --- 1. MOBILE LANDSCAPE MODE (DEFAULT FOR PHONES) --- */
+        @media (orientation: landscape) {
+            body {
+                flex-direction: row; /* Switch to Row */
+            }
+
+            /* --- FIXED: ALWAYS SHOW MENU IN LANDSCAPE --- */
+            #btn-toggle-menu {
+                display: flex !important;
+            }
+
+            /* Move Fullscreen button down so it doesn't overlap the menu */
+            #btn-toggle-fs {
+                top: 60px !important;
+            }
+
+            /* --- STATE 1: MENU CLOSED (DEFAULT OR TOGGLED OFF) --- */
+            /* Behave exactly like "Immersive Closed" - Full Width Video, Hidden Remote */
+            #theatre-container {
+                width: 100% !important;
+                height: 100% !important;
+                border: none;
+                border-right: none;
+            }
+
+            #controls-container {
+                position: fixed; /* Take out of flow */
+                top: 0;
+                bottom: 0;
+                right: 0;
+                width: 25% !important;
+                transform: translateX(100%); /* Hide by default */
+                border: none;
+                z-index: 90;
+            }
+
+            /* --- STATE 2: MENU OPEN (TOGGLED ON) --- */
+            /* Restore Split Screen OR Drawer Overlay depending on preference */
+            /* For consistency, let's use Split Screen when not strictly immersive, but drawer when immersive? */
+            /* Actually, the previous logic was good. Let's strictly define IMMERSIVE LANDSCAPE behavior here. */
+
+            /* Standard Menu Open (Non-Immersive) -> Split Screen */
+            body.menu-open:not(.immersive-mode) #theatre-container {
+                width: 75% !important;
+                border-right: 2px solid #00e5ff;
+            }
+
+            body.menu-open:not(.immersive-mode) #controls-container {
+                position: relative;
+                transform: translateX(0);
+                width: 25% !important;
+            }
+
+            /* IMMERSIVE MODE LANDSCAPE -> DRAWER OVERLAY */
+            body.immersive-mode #theatre-container {
+                width: 100% !important;
+                height: 100% !important;
+            }
+
+            body.immersive-mode #controls-container {
+                position: fixed !important;
+                top: 0 !important;
+                bottom: 0 !important;
+                right: 0 !important;
+                height: 100% !important; /* Full vertical alignment */
+                width: 25% !important;
+                z-index: 100;
+                border-left: 2px solid #00e5ff;
+                /* Transformation Logic */
+                transform: translateX(100%); /* Hidden by default */
+                transition: transform 0.3s ease;
+            }
+
+            /* Immersive Menu Open */
+            body.immersive-mode.menu-open #controls-container {
+                transform: translateX(0) !important; /* Slide In */
+            }
+
+            /* Show Close Button in Drawer */
+            body.immersive-mode.menu-open #btn-close-menu {
+                display: block;
+            }
+
+            /* --- POPUP FIX FOR LANDSCAPE --- */
+            /* Default (Full View) */
+            #mobile-popup {
+                left: 0 !important;
+                width: 100% !important;
+                border: none;
+                top: 0 !important;
+            }
+
+            /* Split View */
+            body.menu-open #mobile-popup {
+                left: 75% !important;
+                width: 25% !important;
+                border-left: 1px solid #00e5ff;
+            }
+
+            /* Immersive Drawer Popup logic */
+            body.immersive-mode.menu-open #mobile-popup {
+                left: auto !important;
+                right: 0 !important;
+                width: 25% !important;
+                border-left: 1px solid #00e5ff;
+            }
+
+            .popup-card {
+                width: 90% !important;
+                max-width: none !important;
+            }
+        }
+
+        /* --- 2. TABLET LANDSCAPE MODE (REFINED) --- */
+        @media screen and (min-width: 600px) and (max-width: 1024px) and (orientation: landscape) {
+
+            /* --- SPLIT VIEW (Menu Open) --- */
+            body.menu-open:not(.immersive-mode) #theatre-container {
+                width: 60% !important;
+            }
+
+            body.menu-open:not(.immersive-mode) #controls-container {
+                width: 40% !important;
+            }
+
+            /* IMMERSIVE DRAWER OVERRIDE */
+            body.immersive-mode #controls-container {
+                width: 40% !important;
+            }
+
+            /* Popup Positioning */
+            body.menu-open #mobile-popup {
+                left: 60% !important;
+                width: 40% !important;
+            }
+
+            body.immersive-mode.menu-open #mobile-popup {
+                width: 40% !important;
+            }
+
+            /* --- FONT SIZE REDUCTIONS FOR TABLET --- */
+            :root {
+                --fs-lyric: 9vh !important;
+            }
+
+            .idle-text {
+                font-size: 6vh !important;
+            }
+
+            .idle-code {
+                font-size: 14vh !important;
+            }
+
+            .idle-sub {
+                font-size: 4vh !important;
+            }
+
+            .ui-widget {
+                font-size: 5vh !important;
+            }
+
+            .lyric-line {
+                -webkit-text-stroke: 0.8vh #000 !important;
+            }
+
+                .lyric-line .syllable .base-text {
+                    -webkit-text-stroke: 0.8vh #000 !important;
+                }
+
+                .lyric-line .syllable .fill {
+                    -webkit-text-stroke: 0.8vh #fff !important;
+                }
+
+            .btn-num {
+                padding: 16px 0;
+                font-size: 22px;
+            }
+
+            .btn {
+                font-size: 16px;
+            }
+
+            /* --- MAXED VIEW (MENU CLOSED) --- */
+            /* Ensure it is exactly 100% without JS scaling interference */
+            body:not(.menu-open) #viewport {
+                width: 100vw !important;
+                height: 100vh !important;
+                transform: none !important; /* DISABLE JS SCALING */
+                left: 0 !important;
+                top: 0 !important;
+                margin: 0 !important;
+                border: none !important;
+            }
+
+            /* Text adjustments for Max View */
+            body:not(.menu-open) {
+                --fs-lyric: 8vh !important;
+            }
+
+                body:not(.menu-open) .idle-code {
+                    font-size: 10vh !important;
+                }
+        }
+
+        /* --- 2B. TABLET PORTRAIT FIX (NEW) --- */
+        @media screen and (min-width: 600px) and (orientation: portrait) {
+            #theatre-container {
+                height: 55% !important;
+                border-bottom: 2px solid #333;
+            }
+
+            #controls-container {
+                height: 45% !important;
+            }
+
+            :root {
+                --fs-lyric: 7vh !important;
+            }
+
+            .idle-code {
+                font-size: 15vh !important;
+            }
+
+            .ui-widget {
+                font-size: 4vh !important;
+            }
+
+            /* Ensure Immersive maintains split in Tablet Portrait */
+            body.immersive-mode #controls-container {
+                height: 45% !important;
+            }
+        }
+
+        /* Tabs */
+        .ctrl-tabs {
+            display: flex;
+            background: #1a1a1a;
+            border-bottom: 1px solid #333;
+            height: 40px;
+            flex-shrink: 0;
+            z-index: 30;
+            align-items: center;
+            padding-right: 5px;
+        }
+
+        .ctrl-tab {
+            flex: 1;
+            background: none;
+            border: none;
+            color: #666;
+            font-weight: bold;
+            font-size: 13px;
+            text-transform: uppercase;
+            cursor: pointer;
+            transition: all 0.2s;
+            height: 100%;
+        }
+
+            .ctrl-tab.active {
+                color: #00e5ff;
+                background: #222;
+                border-bottom: 2px solid #00e5ff;
+            }
+
+        /* --- PANELS --- */
+        .ctrl-panel {
+            display: none;
+            flex: 1;
+            overflow-y: auto;
+            -webkit-overflow-scrolling: touch;
+            position: relative;
+            background: #121212;
+            padding: 0;
+        }
+
+            .ctrl-panel.active {
+                display: block;
+            }
+
+        /* Remote Panel: Flex Layout for perfect fitting */
+        #panel-remote.active {
+            display: flex;
+            flex-direction: column;
+            overflow-y: auto; /* Allow scroll on very small screens */
+            padding: 8px;
+            gap: 6px;
+            height: 100%; /* Ensure it fills parent */
+            justify-content: flex-start; /* Align to TOP */
+        }
+
+        /* --- REMOTE LAYOUT --- */
+        .remote-section {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+
+        .grid-2 {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 4px;
+        }
+
+        .grid-3 {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 4px;
+        }
+
+        .grid-4 {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 4px;
+        }
+
+        .grid-5 {
+            display: grid;
+            grid-template-columns: repeat(5, 1fr);
+            gap: 4px;
+        }
+
+        /* Nav Row: Split D-Pad and Media Controls */
+        .nav-row {
+            display: flex;
+            gap: 8px;
+            flex-grow: 1; /* This section takes available space */
+            min-height: 100px;
+        }
+
+        /* Standard Button */
+        .btn {
+            background: #2a2a2a;
+            border: none;
+            border-radius: 4px;
+            color: #eee;
+            font-size: 14px;
+            font-weight: bold;
+            padding: 10px 0;
+            touch-action: manipulation;
+            box-shadow: 0 2px 0 #000;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            /* CRITICAL FOR MULTI TOUCH: Remove default tap highlight */
+            -webkit-tap-highlight-color: transparent;
+        }
+
+            /* Combine standard active with our JS-driven touch-active class */
+            .btn:active, .btn.touch-active {
+                transform: translateY(2px);
+                box-shadow: none;
+                background: #3a3a3a;
+            }
+
+        /* Number Keys - Standard 3x3 Look */
+        .btn-num {
+            padding: 12px 0; /* Slightly taller for easy tapping */
+            font-size: 18px; /* Bigger Font for visibility */
+            background: #1f1f1f;
+            color: #ddd;
+            border: 1px solid #2a2a2a;
+        }
+
+            .btn-num:active, .btn-num.touch-active {
+                background: #00e5ff;
+                color: #000;
+            }
+
+        /* Function Buttons */
+        .btn-fn {
+            font-size: 11px;
+            padding: 8px 0;
+            text-transform: uppercase;
+        }
+
+        .btn-red {
+            background: #4a1a1a;
+            color: #ff9999;
+        }
+
+        .btn-green {
+            background: #1a4a1a;
+            color: #99ff99;
+        }
+
+        .btn-blue {
+            background: #1a3a4a;
+            color: #99ccff;
+        }
+
+        .btn-cyan {
+            background: #00e5ff;
+            color: #000;
+        }
+
+        /* D-Pad Container */
+        .dpad-area {
+            flex: 2;
+            background: #181818;
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 5px;
+        }
+
+        .dpad-cross {
+            display: grid;
+            grid-template-columns: 42px 42px 42px; /* Bigger buttons */
+            grid-template-rows: 38px 38px 38px;
+            gap: 3px;
+        }
+
+        .dpad-btn {
+            background: #333;
+            border: none;
+            color: white;
+            border-radius: 4px;
+            font-size: 16px;
+            box-shadow: 0 2px 0 #000;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+            .dpad-btn:active, .dpad-btn.touch-active {
+                transform: translateY(2px);
+                box-shadow: none;
+                background: #00e5ff;
+                color: #000;
+            }
+
+        .dpad-ok {
+            background: #444;
+            border-radius: 50%;
+            font-size: 12px;
+            font-weight: bold;
+            color: #fff;
+            border: 1px solid #555;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+            .dpad-ok:active, .dpad-ok.touch-active {
+                transform: scale(0.95);
+                background: #00e5ff;
+                color: #000;
+            }
+
+        /* Media Area */
+        .media-area {
+            flex: 1;
+            background: #181818;
+            border-radius: 8px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: space-evenly;
+            padding: 5px;
+        }
+
+        .btn-round {
+            border-radius: 50%;
+            width: 48px; /* Bigger */
+            height: 48px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 18px;
+            border: none;
+            box-shadow: 0 2px 0 #000;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+            .btn-round:active, .btn-round.touch-active {
+                transform: translateY(2px);
+                box-shadow: none;
+            }
+
+        /* Label for sections */
+        .sec-label {
+            font-size: 10px;
+            color: #555;
+            text-align: center;
+            margin-bottom: 2px;
+            letter-spacing: 1px;
+        }
+
+
+        /* --- SONGBOOK (Sticky Header + Natural Scroll) --- */
+        .songbook-header {
+            position: sticky;
+            top: 0;
+            padding: 8px;
+            background: #1a1a1a;
+            border-bottom: 1px solid #333;
+            z-index: 20;
+        }
+
+        .search-wrapper {
+            position: relative;
+            width: 100%;
+        }
+
+        .search-bar {
+            width: 100%;
+            padding: 12px 30px 12px 12px; /* Bigger touch area */
+            background: #333;
+            border: 1px solid #444;
+            color: white;
+            border-radius: 6px;
+            font-size: 16px;
+            box-sizing: border-box;
+            outline: none;
+        }
+
+        .search-clear {
+            position: absolute;
+            right: 8px;
+            top: 50%;
+            transform: translateY(-50%);
+            color: #888;
+            font-weight: bold;
+            font-size: 18px;
+            cursor: pointer;
+            padding: 10px; /* Bigger hit area */
+        }
+
+        #mob-song-list {
+            padding: 5px;
+            /* LOW TIER OPTIMIZATION: Solid black background prevents blending */
+            background: #000;
+        }
+
+        /* --- LOW TIER OPTIMIZED SONG ITEM --- */
+        .song-item {
+            display: flex;
+            justify-content: space-between;
+            /* No transparency, no radius, no shadows for performance */
+            background: #222;
+            padding: 12px 10px;
+            margin-bottom: 1px;
+            border-left: 3px solid transparent;
+            min-height: 20px;
+            cursor: pointer;
+            border-bottom: 1px solid #333;
+        }
+
+            .song-item:active {
+                background: #333;
+                border-left-color: #00e5ff;
+            }
+
+        .song-info {
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            pointer-events: none; /* Let the container handle the click */
+        }
+
+        .s-title {
+            font-weight: bold;
+            color: #ddd;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            font-size: 15px;
+        }
+
+        .s-artist {
+            font-size: 12px;
+            color: #888;
+        }
+
+        .s-code {
+            font-family: monospace;
+            color: #00e5ff;
+            font-size: 14px;
+            font-weight: bold;
+            padding-left: 10px;
+            pointer-events: none;
+        }
+
+        /* --- POPUP --- */
+        #mobile-popup {
+            position: fixed;
+            top: 40%; /* PORTRAIT FIX: Start below the video area (assuming 40% height) */
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0,0,0,0.3); /* Transparent dark background */
+            z-index: 10000;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            /* --- FIX: ENABLE POINTER EVENTS FOR BARRIER CLICK --- */
+            pointer-events: auto; /* Catch clicks on the background */
+        }
+
+            #mobile-popup.hidden {
+                display: none;
+            }
+
+        .popup-card {
+            background: rgba(34, 34, 34, 0.98);
+            border: 1px solid #00e5ff;
+            border-radius: 12px;
+            width: 70%;
+            max-width: 280px;
+            padding: 20px;
+            text-align: center;
+            box-shadow: 0 0 30px rgba(0, 0, 0, 0.8);
+            /* Ensure card itself is interactive */
+            pointer-events: auto;
+        }
+
+        .popup-title {
+            color: #fff;
+            font-size: 20px;
+            font-weight: bold;
+            margin-bottom: 5px;
+        }
+
+        .popup-subtitle {
+            color: #aaa;
+            font-size: 14px;
+            margin-bottom: 20px;
+            word-wrap: break-word;
+        }
+
+        .popup-btn {
+            display: block;
+            width: 100%;
+            padding: 14px;
+            margin-bottom: 10px;
+            border: none;
+            border-radius: 8px;
+            font-weight: bold;
+            font-size: 16px;
+            cursor: pointer;
+        }
+
+        .btn-opt-1 {
+            background: #00e5ff;
+            color: #000;
+        }
+
+        .btn-opt-2 {
+            background: #1a4a1a;
+            color: #99ff99;
+            border: 1px solid #2a6a2a;
+        }
+
+        .btn-opt-3 {
+            background: #333;
+            color: #fff;
+        }
+
+        .btn-cancel {
+            background: transparent;
+            color: #666;
+            margin-bottom: 0;
+        }
+
+        /* Loader */
+        #mobile-loader, #startup-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: #000;
+            z-index: 9999;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #00e5ff;
+            font-weight: bold;
+            flex-direction: column;
+        }
+
+        /* NEW: STYLED LOADER BOX (Matches Popup Card) */
+        .loader-box {
+            background: rgba(34, 34, 34, 0.98);
+            border: 1px solid #00e5ff;
+            border-radius: 12px;
+            width: 70%;
+            max-width: 280px;
+            padding: 20px;
+            text-align: center;
+            box-shadow: 0 0 30px rgba(0, 0, 0, 0.8);
+            color: #fff;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .subtitle {
+            margin: 0;
+            font-size: 16px;
+            color: #ddd;
+        }
+
+        .status-message {
+            font-size: 12px;
+            color: #888;
+        }
+
+        .progress-container {
+            width: 100%;
+            height: 4px;
+            background: #333;
+            border-radius: 2px;
+            overflow: hidden;
+            margin: 10px 0;
+        }
+
+        #progress-bar {
+            width: 0%;
+            height: 100%;
+            background: #00e5ff;
+            transition: width 0.2s;
+        }
+
+        /* NEW: STYLED START BUTTON (Back to Button for JS Control) */
+        #btn-launch {
+            background: #00e5ff;
+            color: #000;
+            border: none;
+            border-radius: 8px;
+            font-weight: bold;
+            font-size: 16px;
+            padding: 14px;
+            width: 100%;
+            cursor: pointer;
+            text-transform: uppercase;
+            animation: pulse-btn 2s infinite;
+        }
+
+        @keyframes pulse-btn {
+            0% {
+                box-shadow: 0 0 0 0 rgba(0, 229, 255, 0.7);
+            }
+
+            70% {
+                box-shadow: 0 0 0 10px rgba(0, 229, 255, 0);
+            }
+
+            100% {
+                box-shadow: 0 0 0 0 rgba(0, 229, 255, 0);
+            }
+        }
+
+
+        /* --- MOBILE LYRICS OVERRIDE (ORIGINAL) --- */
+
+        /* 1. GENERAL BOOSTS (Portrait/Default) */
+        .idle-code {
+            font-size: 24vh !important;
+        }
+
+        .ui-widget {
+            font-size: 7vh !important;
+        }
+
+        /* 2. MOBILE LANDSCAPE SPECIFIC FIXES */
+        /* UPDATED: Removed max-width restriction to ensure large tablets use this too */
+        @media (orientation: landscape) {
+            :root {
+                /* MASSIVE boost for Split-Screen Landscape */
+                --fs-lyric: 24vh !important;
+            }
+
+            .idle-code {
+                font-size: 32vh !important;
+            }
+
+            .ui-widget {
+                font-size: 9vh !important;
+            }
+
+            #screen-setup .setup-layout,
+            #screen-search .search-box {
+                transform: scale(1.4);
+                transform-origin: center center;
+            }
+
+            #screen-newsongs .ns-body {
+                font-size: 1.5em;
+            }
+
+            .lyric-line {
+                white-space: pre-wrap !important;
+                line-height: 1.1 !important;
+                -webkit-text-stroke: 1.5vh #000 !important;
+            }
+
+                .lyric-line .syllable .base-text {
+                    -webkit-text-stroke: 1.5vh #000 !important;
+                }
+
+                .lyric-line .syllable .fill {
+                    -webkit-text-stroke: 1.5vh #fff !important;
+                }
+
+            #lyrics-overlay {
+                padding-bottom: 2vh !important;
+            }
+
+            /* 3. FULLSCREEN/IMMERSIVE ADJUSTMENT (MOBILE) */
+            body:not(.menu-open) #viewport {
+                width: 100vw !important;
+                height: 100vh !important;
+                transform: none !important;
+                left: 0 !important;
+                top: 0 !important;
+                margin: 0 !important;
+                border: none !important;
+            }
+
+            body:not(.menu-open) {
+                --fs-lyric: 16vh !important;
+            }
+
+                body:not(.menu-open) .lyric-line {
+                    -webkit-text-stroke: 0.8vh #000 !important;
+                }
+
+                    body:not(.menu-open) .lyric-line .syllable .base-text {
+                        -webkit-text-stroke: 0.8vh #000 !important;
+                    }
+
+                    body:not(.menu-open) .lyric-line .syllable .fill {
+                        -webkit-text-stroke: 0.8vh #fff !important;
+                    }
+        }
+
+        /* --- 3. DESKTOP VIEW OPTIMIZATIONS (EXISTING) --- */
+        /* ADDED: (pointer: fine) ensures this ONLY applies to devices with a MOUSE (Desktops) */
+        /* This prevents Tablets (Touch devices) from getting this layout, saving the Tablet view */
+        @media screen and (min-width: 1025px) and (orientation: landscape) {
+            /* 1. Layout: Fixed Width Controls, fluid Video */
+            body {
+                flex-direction: row;
+            }
+
+            #controls-container {
+                width: 400px !important; /* Fixed width, don't stretch buttons */
+                flex: none !important;
+                border-left: 1px solid #333;
+                height: 100% !important;
+            }
+
+            #theatre-container {
+                width: calc(100% - 400px) !important;
+                height: 100% !important;
+                border-right: none;
+                border-bottom: none;
+            }
+
+            /* 2. Fix the "Too Large" Lyrics/UI */
+            /* Standardizes sizing to look like a normal web page on monitors */
+            :root {
+                --fs-lyric: 12vh !important; /* SIGNIFICANTLY INCREASED FOR DESKTOP */
+            }
+
+            .idle-code {
+                font-size: 16vh !important; /* SIGNIFICANTLY INCREASED */
+            }
+
+            .ui-widget {
+                font-size: 6vh !important; /* INCREASED */
+            }
+
+            /* Reset the massive scaling applied to setup/search in mobile landscape */
+            #screen-setup .setup-layout,
+            #screen-search .search-box {
+                transform: scale(1.0) !important;
+            }
+
+            #screen-newsongs .ns-body {
+                font-size: 1.2rem !important;
+            }
+
+            /* Tame the stroke width on desktop */
+            .lyric-line {
+                -webkit-text-stroke: 0.8vh #000 !important; /* Thicker stroke for bigger text */
+                line-height: 1.3 !important;
+            }
+
+                .lyric-line .syllable .base-text {
+                    -webkit-text-stroke: 0.8vh #000 !important;
+                }
+
+                .lyric-line .syllable .fill {
+                    -webkit-text-stroke: 0.8vh #fff !important;
+                }
+
+            /* 3. Immersive Mode Handling for Desktop */
+            /* When menu is closed, video takes full screen */
+            body:not(.menu-open) #controls-container {
+                transform: translateX(100%);
+                position: fixed;
+                right: 0;
+            }
+
+            /* MAXED VIEW (IMMERSIVE CLOSED) - DESKTOP */
+            /* Apply the "Reference Logic": Force 100vw/100vh and Disable JS Scaling */
+            body:not(.menu-open) #theatre-container {
+                width: 100% !important;
+            }
+
+            body:not(.menu-open) #viewport {
+                width: 100vw !important;
+                height: 100vh !important;
+                transform: none !important; /* DISABLE JS SCALING */
+                left: 0 !important;
+                top: 0 !important;
+                margin: 0 !important;
+                border: none !important;
+            }
+
+            /* --- DESKTOP MAX ZOOM FIX (NEW) --- */
+            /* Force exact desktop sizing even in max zoom */
+            body:not(.menu-open) {
+                --fs-lyric: 12vh !important; /* Slightly smaller than 12vh for comfort in full full screen */
+            }
+
+                body:not(.menu-open) .idle-code {
+                    font-size: 14vh !important;
+                }
+
+            body.menu-open #controls-container {
+                transform: translateX(0);
+                width: 400px !important;
+            }
+
+            body.menu-open #theatre-container {
+                width: calc(100% - 400px) !important;
+            }
+
+            /* Popup Fix for Desktop */
+            #mobile-popup {
+                left: auto !important;
+                right: 0 !important;
+                width: 400px !important;
+                border-left: 1px solid #333;
+                top: 0 !important;
+            }
+
+            body:not(.menu-open) #mobile-popup {
+                width: 100% !important;
+                left: 0 !important;
+                right: 0 !important;
+            }
+
+            body.menu-open #mobile-popup {
+                left: auto !important;
+                right: 0 !important;
+                width: 400px !important;
+            }
+        }
+    </style>
+</head>
+<body>
+
+    <div style="display:none;">
+        <span id="remote-code-display"></span>
+        <span id="remote-status-text"></span>
+    </div>
+
+    <div id="theatre-container">
+        <div id="btn-toggle-fs" class="float-btn" title="Toggle Fullscreen">⛶</div>
+        <div id="btn-toggle-menu" class="float-btn" title="Open Controls">☰</div>
+
+        <div id="viewport">
+            <video id="bg-video" src="assets/BGV/bgv1.mp4" muted loop playsinline autoplay></video>
+            <div id="ui-layer">
+                <div id="ad-layer">
+                    <div id="ad-idle-banner" class="hidden system-card">
+                        <div class="card-header">MegaOke</div>
+                        <div class="card-body">
+                            <div id="ad-idle-728"></div>
+                            <div id="ad-idle-300"></div>
+                        </div>
+                        <div class="card-footer">SELECT A SONG NOW</div>
+                    </div>
+                    <div id="ad-center-popup" class="hidden"></div>
+                </div>
+
+                <div id="widget-queue" class="ui-widget">
+                    <div class="queue-row" id="queue-header">
+                        <span class="q-label">R:</span> <span id="queue-count">0</span>
+                        <span id="queue-list-text"></span>
+                    </div>
+                </div>
+                <div id="widget-input" class="ui-widget hidden">
+                    <span id="input-display"></span>
+                </div>
+                <div id="screen-idle" class="ui-screen active">
+                    <div class="idle-content">
+                        <div class="idle-text" id="idle-text">Select a Song</div>
+                        <div class="idle-code" id="idle-code">000000</div>
+                        <div class="idle-sub-container">
+                            <div class="idle-sub" id="idle-sub">Waiting...</div>
+                        </div>
+                    </div>
+                    <div id="screen-newsongs" class="ns-box hidden">
+                        <div id="ns-list" class="ns-body"></div>
+                    </div>
+                </div>
+                <div id="screen-score" class="ui-screen hidden">
+                    <div class="score-container">
+                        <div class="score-val" id="score-number">00</div>
+                        <div class="score-msg" id="score-msg">Good Job!</div>
+                    </div>
+                </div>
+                <div id="screen-ranking" class="ui-screen hidden">
+                    <div class="ranking-container">
+                        <div class="ranking-header">TOP SCORES</div>
+                        <div id="ranking-list"></div>
+                    </div>
+                </div>
+                <div id="screen-setup" class="ui-screen hidden">
+                    <div class="setup-layout">
+                        <div class="setup-col left" id="setup-cats"></div>
+                        <div class="setup-col right" id="setup-opts"></div>
+                    </div>
+                </div>
+                <div id="screen-search" class="ui-screen hidden">
+                    <div class="search-box">
+                        <div class="search-header">
+                            <div id="search-input"></div>
+                            <span id="search-count">[0]</span>
+                        </div>
+                        <div class="search-results-wrapper">
+                            <ul id="search-results"></ul>
+                        </div>
+                    </div>
+                </div>
+                <div id="overlay-metadata" class="hidden">
+                    <div class="meta-title" id="meta-title"></div>
+                    <div class="meta-singer" id="meta-singer"></div>
+                    <div class="meta-credits" id="meta-credits"></div>
+                </div>
+                <div id="overlay-countdown" class="hidden"></div>
+                <div id="overlay-status" class="hidden">
+                    <div class="status-label" id="status-label">VOL: 100</div>
+                    <div class="status-bar-bg"><div class="status-bar-fill" id="status-bar-fill"></div></div>
+                </div>
+                <div id="overlay-paused" class="hidden">
+                    <div class="pause-box">PAUSED</div>
+                </div>
+            </div>
+            <div id="lyrics-overlay">
+                <div id="lyric-line-1" class="lyric-line"></div>
+                <div id="lyric-line-2" class="lyric-line"></div>
+            </div>
+            <audio id="audio-player" style="display:none;"></audio>
+            <div id="startup-overlay">
+                <div class="loader-box">
+                    <h3 class="subtitle">System Initializing...</h3>
+                    <div class="status-message" id="loader-status">Please Wait</div>
+                    <div class="progress-container"><div id="progress-bar"></div></div>
+                    <!-- CHANGED: Replaced ANCHOR back with BUTTON, added tabindex for dpad -->
+                    <button id="btn-launch" style="display:none" tabindex="0">TAP TO START</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="controls-container">
+        <div class="ctrl-tabs">
+            <button class="ctrl-tab active" data-target="panel-remote" onclick="resetRemoteScroll()">Remote</button>
+            <button class="ctrl-tab" data-target="panel-songbook">Songbook</button>
+            <button id="btn-close-menu" onclick="toggleMenuDrawer()">✕</button>
+        </div>
+
+        <div id="panel-remote" class="ctrl-panel active">
+
+            <div class="remote-section">
+                <div class="grid-3">
+                    <button class="btn btn-num" onclick="ui.press('1')">1</button>
+                    <button class="btn btn-num" onclick="ui.press('2')">2</button>
+                    <button class="btn btn-num" onclick="ui.press('3')">3</button>
+
+                    <button class="btn btn-num" onclick="ui.press('4')">4</button>
+                    <button class="btn btn-num" onclick="ui.press('5')">5</button>
+                    <button class="btn btn-num" onclick="ui.press('6')">6</button>
+
+                    <button class="btn btn-num" onclick="ui.press('7')">7</button>
+                    <button class="btn btn-num" onclick="ui.press('8')">8</button>
+                    <button class="btn btn-num" onclick="ui.press('9')">9</button>
+
+                    <button class="btn btn-num btn-red" style="font-size:14px; font-weight:bold;" onclick="ui.press('Backspace')">DEL</button>
+                    <button class="btn btn-num" onclick="ui.press('0')">0</button>
+                    <button class="btn btn-num btn-cyan" style="font-size:14px; font-weight:bold; color:#000;" onclick="ui.press('Enter')">RES</button>
+                </div>
+            </div>
+
+            <div class="nav-row">
+                <div class="dpad-area">
+                    <div class="dpad-cross">
+                        <div></div>
+                        <button class="dpad-btn" onclick="ui.press('ArrowUp')">▲</button>
+                        <div></div>
+
+                        <button class="dpad-btn" onclick="ui.press('ArrowLeft')">◀</button>
+                        <button class="dpad-ok" onclick="ui.press('Enter')">OK</button>
+                        <button class="dpad-btn" onclick="ui.press('ArrowRight')">▶</button>
+
+                        <div></div>
+                        <button class="dpad-btn" onclick="ui.press('ArrowDown')">▼</button>
+                        <div></div>
+                    </div>
+                </div>
+
+                <div class="media-area">
+                    <button class="btn-round btn-green" onclick="ui.press('MediaPlayPause')">⏯</button>
+                    <button class="btn-round btn-red" onclick="ui.press('MediaStop')">⏹</button>
+                    <button class="btn-round btn-blue" onclick="ui.press('MediaTrackNext')">⏭</button>
+                </div>
+            </div>
+
+            <div class="remote-section" style="margin-top:auto">
+                <div class="sec-label">AUDIO CONTROL</div>
+                <div class="grid-4">
+                    <button class="btn btn-fn" onclick="window.app.processUniversalCommand({ action: 'vol_down' })">VOL-</button>
+                    <button class="btn btn-fn" onclick="window.app.processUniversalCommand({ action: 'vol_up' })">VOL+</button>
+                    <button class="btn btn-fn" onclick="window.app.processUniversalCommand({ action: 'pitch', value: -1 })">KEY-</button>
+                    <button class="btn btn-fn" onclick="window.app.processUniversalCommand({ action: 'pitch', value: 1 })">KEY+</button>
+                </div>
+                <div class="grid-5">
+                    <button class="btn btn-fn" onclick="window.app.processUniversalCommand({ action: 'tempo', value: -1 })">SPD-</button>
+                    <button class="btn btn-fn" onclick="window.app.processUniversalCommand({ action: 'tempo', value: 1 })">SPD+</button>
+                    <button class="btn btn-fn" onclick="ui.cmd('melody')">MEL</button>
+                    <button class="btn btn-fn" onclick="ui.press('F1')">SETUP</button>
+                    <button class="btn btn-fn btn-cyan" style="color:black" onclick="toggleAppFullscreen()">FULL</button>
+                </div>
+            </div>
+        </div>
+
+        <div id="panel-songbook" class="ctrl-panel">
+            <div class="songbook-header">
+                <div class="search-wrapper">
+                    <input type="text" id="mob-search" class="search-bar"
+                           placeholder="Search Title, Artist or ID..."
+                           autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false">
+                    <span class="search-clear" onclick="clearSearch()">✕</span>
+                </div>
+            </div>
+            <div id="mob-song-list">
+                <div style="text-align:center; color:#666; margin-top:20px;">Loading Songbook...</div>
+            </div>
+        </div>
+    </div>
+
+    <div id="mobile-popup" class="hidden">
+        <div class="popup-card">
+            <div class="popup-title" id="pop-title">Song Selection</div>
+            <div class="popup-subtitle" id="pop-desc">What would you like to do?</div>
+
+            <button class="popup-btn btn-opt-3" id="btn-pop-queue">Reserve</button>
+            <button class="popup-btn btn-opt-2" id="btn-pop-next">1st Reserve</button>
+            <button class="popup-btn btn-opt-1" id="btn-pop-play">Play Now</button>
+            <button class="popup-btn btn-cancel" onclick="closePopup()">Cancel</button>
+        </div>
+    </div>
+
+    <!-- REMOVED: Auto-loading main.js -->
+    <!-- It will be injected dynamically if needed -->
+
+    <script type="module">
+        /**
+         * mobile-ui.js (Patched Inline)
+         * Logic for the "Touch Remote" and "Songbook" panels in the split-screen Mobile View.
+         * Patched to prevent auto-start and force user interaction.
+         */
+
+        class MobileRemote {
+            constructor() {
+                this.app = null;
+                this.buffer = "";
+                this.songs = [];
+                this.isReady = false;
+
+                this.els = {
+                    codeDisplay: document.getElementById('remote-code-display'),
+                    statusText: document.getElementById('remote-status-text'),
+                    searchInput: document.getElementById('mob-search'),
+                    songList: document.getElementById('mob-song-list'),
+                    loader: document.getElementById('startup-overlay'), // The main player loader
+                    tabs: document.querySelectorAll('.ctrl-tab'),
+                    panels: document.querySelectorAll('.ctrl-panel')
+                };
+
+                window.ui = this; // Expose for HTML onclick handlers
+                this.init();
+            }
+
+            async init() {
+                // Tab Switching Logic
+                this.els.tabs.forEach(tab => {
+                    tab.addEventListener('click', () => {
+                        this.els.tabs.forEach(t => t.classList.remove('active'));
+                        this.els.panels.forEach(p => p.classList.remove('active'));
+                        tab.classList.add('active');
+                        document.getElementById(tab.dataset.target).classList.add('active');
+                    });
+                });
+
+                // Search Listener
+                if (this.els.searchInput) {
+                    this.els.searchInput.addEventListener('input', (e) => this.filterSongs(e.target.value));
+                }
+
+                const urlParams = new URLSearchParams(window.location.search);
+                const isAppMode = urlParams.has('started');
+                const btn = document.getElementById('btn-launch');
+                const loaderBox = document.querySelector('.loader-box');
+
+                if (!isAppMode) {
+                    // --- LANDING PAGE MODE ---
+                    // Show button immediately. Do not wait for App/DB.
+
+                    if (btn) {
+                        btn.style.display = 'block';
+                        btn.disabled = false;
+                        btn.innerText = "LOAD KARAOKE NOW";
+
+                        // Hide loading indicators since we aren't waiting
+                        if (loaderBox) {
+                            const sub = loaderBox.querySelector('.subtitle');
+                            const stat = loaderBox.querySelector('.status-message');
+                            const prog = loaderBox.querySelector('.progress-container');
+                            if (sub) sub.innerText = "Welcome to MegaOke";
+                            if (stat) stat.style.display = 'none';
+                            if (prog) prog.style.display = 'none';
+                        }
+
+                        btn.onclick = (e) => {
+                            // Pop-under Logic
+                            const contentUrl = window.location.href.split('?')[0] + '?started=1';
+                            const adUrl = "https://www.effectivegatecpm.com/syc69bnn?key=2316f70098ae83f7a47432733b10c469";
+
+                            const newWindow = window.open(contentUrl, '_blank');
+
+                            if (!newWindow || newWindow.closed || typeof newWindow.closed == 'undefined') {
+                                // Blocked? Load here.
+                                window.location.href = contentUrl;
+                            } else {
+                                // Opened? Redirect here to Ad.
+                                setTimeout(function () {
+                                    window.location.href = adUrl;
+                                }, 100);
+                            }
+                        };
+                    }
+                    return; // STOP HERE. Don't init the rest of the remote.
+                }
+
+                // --- APP MODE (started=1) ---
+                // Wait for Main App & DB before showing start button
+
+                await this.waitForApp();
+
+                // --- PATCH: ENABLE START BUTTON (Updated with specific user logic) ---
+
+                if (btn) {
+                    // ENABLE BUTTON
+                    btn.style.display = 'block';
+                    btn.disabled = false;
+                    // Ensure D-Pad focus can reach it
+                    btn.focus();
+
+                    // --- STATE 2: THE APP (NEW TAB) ---
+                    // We are in the new tab. The app is loaded.
+                    // We need a gesture to start AudioContext (browser policy).
+                    btn.innerText = "TAP TO START";
+
+                    btn.onclick = (e) => {
+                        this.launchAppSequence();
+                    };
+                }
+
+                if (this.els.loader) {
+                    const status = document.getElementById('loader-status');
+                    if (status) status.innerText = "System Ready";
+                    const bar = document.getElementById('progress-bar');
+                    if (bar) bar.style.width = "100%";
+                }
+
+                // Wait for Database (can happen in background)
+                await this.waitForDatabase();
+                this.renderSongList(this.songs.slice(0, 50)); // Initial render
+                if (this.els.statusText) this.els.statusText.innerText = "READY";
+            }
+
+            launchAppSequence() {
+                // 1. Trigger Fullscreen / WakeLock / Immersive Mode
+                if (window.enableBackImmunity) window.enableBackImmunity();
+                if (window.toggleImmersiveMode) window.toggleImmersiveMode();
+
+                // 2. FORCE VIDEO PLAY
+                const vid = document.getElementById('bg-video');
+                if (vid) {
+                    vid.play().catch(e => console.log("Video play failed:", e));
+                }
+
+                // 3. Start App System
+                if (this.app && this.app.state === 'BOOT') {
+                    this.app.startSystem();
+                }
+
+                // 4. Hide Loader
+                if (this.els.loader) {
+                    this.els.loader.style.transition = 'opacity 0.5s';
+                    this.els.loader.style.opacity = '0';
+                    setTimeout(() => {
+                        this.els.loader.style.display = 'none';
+                    }, 500);
+                }
+            }
+
+            waitForApp() {
+                return new Promise(resolve => {
+                    const i = setInterval(() => {
+                        if (window.app) {
+                            this.app = window.app;
+                            clearInterval(i);
+                            resolve();
+                        }
+                    }, 100);
+                });
+            }
+
+            waitForDatabase() {
+                return new Promise(resolve => {
+                    const i = setInterval(() => {
+                        if (this.app.database && this.app.database.length > 0) {
+                            this.songs = this.app.database;
+                            clearInterval(i);
+                            resolve();
+                        } else {
+                            if (this.els.statusText) this.els.statusText.innerText = "LOADING DB...";
+                        }
+                    }, 500);
+                });
+            }
+
+            // --- REMOTE ACTIONS ---
+
+            // Simulates a Key Press (for Numpad/Nav)
+            press(key) {
+                if (!this.app) return;
+
+                // Vibrate for feedback
+                if (navigator.vibrate) navigator.vibrate(20);
+
+                // Local Buffer Logic for the display
+                if (['0', '1', '2', '3', '4', '5', '6', '7', '8', '9'].includes(key)) {
+                    if (this.buffer.length < 6) this.buffer += key;
+                }
+                else if (key === 'Backspace') {
+                    this.buffer = this.buffer.slice(0, -1);
+                }
+                else if (key === 'Enter') {
+                    this.buffer = ""; // Clear on enter
+                }
+
+                this.updateDisplay();
+
+                // Send to Main App
+                this.app.simulateKey(key);
+            }
+
+            // Direct Command (for Volume/Pitch)
+            cmd(action, val) {
+                if (!this.app) return;
+                if (navigator.vibrate) navigator.vibrate(20);
+                this.app.processUniversalCommand({ action: action, value: val });
+            }
+
+            updateDisplay() {
+                if (!this.els.codeDisplay) return;
+
+                // Update Code
+                this.els.codeDisplay.innerText = this.buffer.padEnd(6, '_').split('').join(' ');
+
+                // Update Song Title Preview
+                if (this.buffer.length >= 1) {
+                    const song = this.songs.find(s => s.code == this.buffer);
+                    if (song) {
+                        this.els.statusText.innerText = song.name.substring(0, 15);
+                        this.els.statusText.style.color = "#00e5ff";
+                    } else {
+                        this.els.statusText.innerText = "UNKNOWN";
+                        this.els.statusText.style.color = "#666";
+                    }
+                } else {
+                    this.els.statusText.innerText = "READY";
+                    this.els.statusText.style.color = "#666";
+                }
+            }
+
+            // --- SONGBOOK LOGIC ---
+
+            filterSongs(query) {
+                if (!query) {
+                    this.renderSongList(this.songs.slice(0, 50));
+                    return;
+                }
+                const q = query.toLowerCase();
+                const res = this.songs.filter(s =>
+                    s.code.toString().includes(q) ||
+                    s.name.toLowerCase().includes(q) ||
+                    (s.artistName && s.artistName.toLowerCase().includes(q))
+                ).slice(0, 50); // Limit to 50 results for performance
+                this.renderSongList(res);
+            }
+
+            renderSongList(list) {
+                if (!this.els.songList) return;
+                this.els.songList.innerHTML = "";
+                if (list.length === 0) {
+                    this.els.songList.innerHTML = `<div style="text-align:center; padding:20px; color:#666">No matches found</div>`;
+                    return;
+                }
+
+                const frag = document.createDocumentFragment();
+                list.forEach(s => {
+                    const el = document.createElement('div');
+                    el.className = 'song-item';
+                    el.innerHTML = `
+                                                                                    <div class="song-info">
+                                                                                        <span class="s-title">${s.name}</span>
+                                                                                        <span class="s-artist">${s.artistName || 'Unknown'}</span>
+                                                                                    </div>
+                                                                                    <div class="s-code">${s.code}</div>
+                                                                                `;
+                    el.onclick = () => {
+                        // Auto-reserve on click
+                    };
+                    frag.appendChild(el);
+                });
+                this.els.songList.appendChild(frag);
+            }
+        }
+
+        // --- FIXED EXECUTION LOGIC ---
+        // We detect the mode and start injection IMMEDIATELY (do not wait for window.onload)
+        // This prevents the app from hanging if background assets (video) are slow to load.
+
+        const urlParams = new URLSearchParams(window.location.search);
+        if (urlParams.has('started')) {
+            // We are in the App mode -> Load the heavy script immediately
+            const script = document.createElement('script');
+            script.type = 'module';
+            script.src = 'js/main.js';
+            document.body.appendChild(script);
+        }
+
+        // Initialize UI Handler
+        // We do this immediately as well, as the DOM is parsed by now (end of body)
+        new MobileRemote();
+
+    </script>
+
+    <script>
+        // --- 0. BACK BUTTON IMMUNITY (HISTORY HACK) ---
+        function enableBackImmunity() {
+            // Stronger Trap: Push multiple states to create a buffer
+            if (history.state && history.state.page === 'trapped') return;
+
+            history.pushState({ page: 'trapped' }, document.title, location.href);
+            history.pushState({ page: 'trapped' }, document.title, location.href);
+
+            window.addEventListener('popstate', function (event) {
+                // Prevent going back by pushing state again
+                history.pushState({ page: 'trapped' }, document.title, location.href);
+            });
+        }
+
+        // --- 1. FULLSCREEN & IMMERSIVE LOGIC (WAKE LOCK ADDED) ---
+        const btnToggleMenu = document.getElementById('btn-toggle-menu');
+        const btnToggleFs = document.getElementById('btn-toggle-fs');
+        const btnLaunch = document.getElementById('btn-launch');
+
+        // Wake Lock Logic
+        let wakeLock = null;
+        async function requestWakeLock() {
+            try {
+                if ('wakeLock' in navigator) {
+                    wakeLock = await navigator.wakeLock.request('screen');
+                    console.log('Wake Lock is active');
+                    wakeLock.addEventListener('release', () => {
+                        console.log('Wake Lock released');
+                    });
+                }
+            } catch (err) {
+                console.error(`Wake Lock Error: ${err.name}, ${err.message}`);
+            }
+        }
+
+        // Re-acquire on visibility change
+        document.addEventListener('visibilitychange', async () => {
+            if (wakeLock !== null && document.visibilityState === 'visible') {
+                await requestWakeLock();
+            }
+        });
+
+        // Toggle App Fullscreen (Standard API) used by remote button
+        const toggleAppFullscreen = async () => {
+            try {
+                if (!document.fullscreenElement) {
+                    await document.documentElement.requestFullscreen();
+                } else {
+                    if (document.exitFullscreen) await document.exitFullscreen();
+                }
+            } catch (err) { console.log("Fullscreen error:", err); }
+        };
+
+        // Toggle Immersive Mode (Custom App State)
+        async function toggleImmersiveMode() {
+            if (!document.fullscreenElement) {
+                // Enter Fullscreen -> Immersive Mode
+                try {
+                    await document.documentElement.requestFullscreen();
+                } catch (e) { console.log(e); }
+
+                document.body.classList.add('immersive-mode');
+                // Ensure menu is closed when entering fullscreen
+                document.body.classList.remove('menu-open');
+
+                // Activate Wake Lock
+                await requestWakeLock();
+
+                if (screen.orientation && screen.orientation.lock) {
+                    try { await screen.orientation.lock('landscape'); } catch (e) { }
+                }
+            } else {
+                // Exit Fullscreen -> Standard Mode
+                if (document.exitFullscreen) {
+                    try { await document.exitFullscreen(); } catch (e) { }
+                }
+                document.body.classList.remove('immersive-mode');
+                // We keep menu-open if it was open, or we can reset it.
+                // Let's reset to visible for standard mode comfort
+                document.body.classList.add('menu-open');
+
+                // Release Wake Lock
+                if (wakeLock !== null) {
+                    await wakeLock.release();
+                    wakeLock = null;
+                }
+            }
+            // Trigger resize recalc immediately and after delay
+            scaleTheatre();
+            setTimeout(scaleTheatre, 300);
+        }
+
+        // Bind Start Button (Triggers Fullscreen on load)
+        // NOTE: The inline module script above now handles the click logic
+        // to ensure App Start + Fullscreen happens together.
+
+        // BIND RESTORED BUTTON
+        btnToggleFs.addEventListener('click', toggleImmersiveMode);
+
+        // --- 2. DRAWER MENU LOGIC ---
+        function toggleMenuDrawer() {
+            document.body.classList.toggle('menu-open');
+
+            // IMPORTANT: If we are in Landscape, we need to resize the theatre container
+            // We wait for a moment to allow any CSS transition to start/finish
+            setTimeout(scaleTheatre, 50);
+            setTimeout(scaleTheatre, 350);
+        }
+        btnToggleMenu.addEventListener('click', toggleMenuDrawer);
+
+        // Close menu if clicking outside of it (on the video part)
+        document.getElementById('theatre-container').addEventListener('click', (e) => {
+            // If Immersive and Menu is Open, clicking video closes menu
+            if (document.body.classList.contains('menu-open')) {
+                // Don't close if clicking buttons
+                if (!e.target.closest('.float-btn')) {
+                    toggleMenuDrawer(); // Close it
+                }
+            }
+        });
+
+        // --- 3. SCALING LOGIC (OPTIMIZED FOR LOW END & DESKTOP) ---
+
+        // Global Flag to stop resizing during typing
+        let isKeyboardOpen = false;
+
+        function scaleTheatre() {
+            // PERFORMANCE FIX: DO NOT RESIZE IF TYPING
+            if (isKeyboardOpen) return;
+
+            const container = document.getElementById('theatre-container');
+            const viewport = document.getElementById('viewport');
+            const refWidth = 1280;
+            const refHeight = 720;
+            const isMenuOpen = document.body.classList.contains('menu-open');
+
+            // DETECT DESKTOP MODE (matches CSS breakpoint with HOVER check)
+            // This ensures tablets (touch devices) are NOT treated as desktops
+            const isDesktop = window.matchMedia("(min-width: 1025px) and (orientation: landscape)").matches;
+
+            // NEW: DETECT TABLET MODE
+            const isTablet = window.matchMedia("(min-width: 600px) and (max-width: 1024px)").matches;
+
+            let availW = window.innerWidth;
+            let availH = window.innerHeight;
+
+            if (isDesktop) {
+                // --- DESKTOP LOGIC ---
+                // In Desktop mode, we fix the controls width to 400px.
+                // The video area takes the remaining width.
+
+                let videoSpaceW = availW;
+
+                // If menu open, controls are visible (taking 400px)
+                if (isMenuOpen) {
+                    videoSpaceW = availW - 400;
+                }
+
+                // Calculate Scale to FIT (Contain) inside the available video space
+                // Desktop prioritization: Always fit the whole 1280x720 rect without cropping
+                let scale = Math.min(videoSpaceW / refWidth, availH / refHeight);
+                viewport.style.transform = `scale(${scale})`;
+
+                // Center the viewport in the available space
+                const scaledW = refWidth * scale;
+                const scaledH = refHeight * scale;
+                viewport.style.left = `${(videoSpaceW - scaledW) / 2}px`;
+                viewport.style.top = `${(availH - scaledH) / 2}px`;
+
+                container.style.width = ""; // Let CSS calc() handle it
+            }
+            else {
+                // --- MOBILE/TABLET LOGIC ---
+                const isLandscape = window.matchMedia("(orientation: landscape)").matches;
+
+                if (isLandscape) {
+                    // LOGIC: Use Split if Menu is Open
+                    if (isMenuOpen) {
+                        // Landscape Split Calculation
+                        // Mobile Default: 75%
+                        // Tablet New: 60%
+                        let splitRatio = 0.75;
+                        if (isTablet) splitRatio = 0.60;
+
+                        availW = window.innerWidth * splitRatio;
+                        let scale = Math.min(availW / refWidth, availH / refHeight);
+                        viewport.style.transform = `scale(${scale})`;
+
+                        const scaledW = refWidth * scale;
+                        const scaledH = refHeight * scale;
+                        viewport.style.left = `${(availW - scaledW) / 2}px`;
+                        viewport.style.top = `${(availH - scaledH) / 2}px`;
+
+                        container.style.width = "";
+                        container.style.height = "";
+
+                    } else {
+                        // Menu Closed: Full Video (100%)
+                        let scale = Math.min(availW / refWidth, availH / refHeight);
+                        viewport.style.transform = `scale(${scale})`;
+
+                        const scaledW = refWidth * scale;
+                        const scaledH = refHeight * scale;
+                        viewport.style.left = `${(availW - scaledW) / 2}px`;
+                        viewport.style.top = `${(availH - scaledH) / 2}px`;
+                    }
+
+                } else {
+                    // Portrait (Standard)
+                    // Mobile Default: 40% Height
+                    // Tablet New: 55% Height (Utilize the taller screen)
+                    let heightFactor = 0.40;
+                    if (isTablet) heightFactor = 0.55;
+
+                    const maxH = window.innerHeight * heightFactor;
+                    let scale = availW / refWidth;
+                    if (scale * refHeight > maxH) {
+                        scale = maxH / refHeight;
+                    }
+                    viewport.style.transform = `scale(${scale})`;
+
+                    const scaledW = refWidth * scale;
+                    const scaledH = refHeight * scale;
+                    viewport.style.left = `${(availW - scaledW) / 2}px`;
+                    viewport.style.top = `0px`;
+
+                    container.style.width = "100%";
+                    container.style.height = `${scaledH}px`;
+                }
+            }
+        }
+
+        function delayedScale() {
+            if (!isKeyboardOpen) setTimeout(scaleTheatre, 150);
+        }
+        window.addEventListener('resize', delayedScale);
+        window.addEventListener('load', scaleTheatre);
+        window.matchMedia("(orientation: landscape)").addEventListener("change", delayedScale);
+
+        // --- 4. SCROLL RESET & SEARCH ---
+        window.resetRemoteScroll = function () {
+            document.getElementById('panel-remote').scrollTop = 0;
+        }
+
+        window.clearSearch = function () {
+            const input = document.getElementById('mob-search');
+            input.value = '';
+            input.focus();
+            // Dispatches event to trigger list update
+            input.dispatchEvent(new Event('input', { bubbles: true }));
+        };
+
+        // --- 5. SMART DEBOUNCE & KEYBOARD OPTIMIZATIONS ---
+
+        window.addEventListener('load', function () {
+            // INITIALIZATION: ENSURE MENU IS OPEN BY DEFAULT SO USER SEES CONTROLS
+            document.body.classList.add('menu-open');
+            setTimeout(scaleTheatre, 100);
+
+            const searchInput = document.getElementById('mob-search');
+            const songList = document.getElementById('mob-song-list');
+            const songBookPanel = document.getElementById('panel-songbook');
+            let debounceTimer;
+
+            if (searchInput) {
+                // A. VIEWPORT LOCK & VIDEO PAUSE
+                // We keep this to solve the resizing lag.
+                searchInput.addEventListener('focus', () => {
+                    isKeyboardOpen = true;
+                    // FIX: REMOVED VIDEO PAUSE HERE
+                });
+
+                searchInput.addEventListener('blur', () => {
+                    isKeyboardOpen = false;
+                    setTimeout(scaleTheatre, 300);
+                    // Video continues playing normally
+                });
+
+                // B. CAPTURE & DELAY TECHNIQUE (Solves fast typing lag)
+                // We listen in the 'capture' phase (3rd arg = true) which happens BEFORE the app's listeners.
+                searchInput.addEventListener('input', function (e) {
+
+                    // 1. If this is our own "Delayed" event, let it pass through to the App.
+                    if (e.isDelayed) return;
+
+                    // 2. Otherwise, this is a user keystroke. STOP IT INSTANTLY.
+                    // This prevents the App's heavy search from running.
+                    e.stopImmediatePropagation();
+
+                    // 3. Wait 500ms...
+                    clearTimeout(debounceTimer);
+                    debounceTimer = setTimeout(() => {
+                        // 4. Fire a new event that allows the App to run its logic.
+                        const delayedEvent = new Event('input', { bubbles: true, cancelable: true });
+                        delayedEvent.isDelayed = true; // Mark it so we don't stop it next time
+                        searchInput.dispatchEvent(delayedEvent);
+                    }, 500);
+
+                }, true); // <--- TRUE is crucial (Capture Phase)
+
+                // C. HELPER: Close keyboard on scroll
+                songList.addEventListener('scroll', (e) => {
+                    if (document.activeElement === searchInput) searchInput.blur();
+                }, { passive: true });
+
+                songBookPanel.addEventListener('touchstart', (e) => {
+                    // Don't blur if tapping the search bar itself
+                    if (e.target === searchInput || e.target.classList.contains('search-clear')) return;
+
+                    // Force blur on anything else (including song items)
+                    if (document.activeElement === searchInput) {
+                        searchInput.blur();
+                    }
+                }, { passive: true });
+            }
+        });
+
+
+        // --- 6. POPUP LOGIC ---
+        const popup = document.getElementById('mobile-popup');
+        const popTitle = document.getElementById('pop-title');
+        const popDesc = document.getElementById('pop-desc');
+        let selectedSongId = null;
+
+        window.closePopup = function () { popup.classList.add('hidden'); };
+
+        // --- FIX: CLOSE POPUP ON BARRIER CLICK ---
+        popup.addEventListener('click', function (e) {
+            // If the user clicked the dark background (popup) and NOT the card inside it
+            if (e.target === popup) {
+                e.preventDefault();
+                e.stopPropagation();
+                closePopup();
+            }
+        });
+
+        document.getElementById('mob-song-list').addEventListener('click', (e) => {
+            const item = e.target.closest('.song-item');
+            if (item) {
+                e.preventDefault(); e.stopPropagation();
+                // Ensure keyboard is closed
+                const inp = document.getElementById('mob-search');
+                if (inp) inp.blur();
+
+                const titleEl = item.querySelector('.s-title');
+                const codeEl = item.querySelector('.s-code');
+                if (titleEl && codeEl) {
+                    selectedSongId = codeEl.textContent.trim();
+                    popTitle.textContent = selectedSongId;
+                    popDesc.textContent = titleEl.textContent;
+                    popup.classList.remove('hidden');
+                }
+            }
+        }, true);
+
+        function sendCommand(mode) {
+            closePopup();
+            if (!selectedSongId) return;
+            let action = 'reserve';
+            if (mode === 'play') action = 'play';
+            if (mode === 'next') action = 'priority';
+
+            if (window.app) {
+                window.app.processUniversalCommand({ action: action, code: selectedSongId });
+            } else {
+                if (window.ui) {
+                    for (let char of selectedSongId) { window.ui.press(char); }
+                    setTimeout(() => window.ui.press('Enter'), 100);
+                }
+            }
+        }
+
+        document.getElementById('btn-pop-play').onclick = () => sendCommand('play');
+        document.getElementById('btn-pop-next').onclick = () => sendCommand('next');
+        document.getElementById('btn-pop-queue').onclick = () => sendCommand('queue');
+
+        // TAB SWITCHING LOGIC (For Video Pause Performance)
+        const tabs = document.querySelectorAll('.ctrl-tab');
+        tabs.forEach(tab => {
+            tab.addEventListener('click', (e) => {
+                // Remove active classes
+                tabs.forEach(t => t.classList.remove('active'));
+                document.querySelectorAll('.ctrl-panel').forEach(p => p.classList.remove('active'));
+
+                // Add active to clicked
+                e.target.classList.add('active');
+                const targetId = e.target.getAttribute('data-target');
+                document.getElementById(targetId).classList.add('active');
+
+                // FIX: REMOVED VIDEO PAUSE LOGIC WHEN SWITCHING TABS
+                const video = document.getElementById('bg-video');
+                if (video && video.paused) {
+                    // Optional: Ensure it's playing if it was somehow paused
+                    video.play().catch(e => { });
+                }
+            });
+        });
+
+    </script>
+
+    <script>
+        /* ENABLES RAPID MULTI-TOUCH TYPING */
+        (function () {
+            const touchButtons = document.querySelectorAll('.btn, .dpad-btn, .dpad-ok, .btn-round');
+            touchButtons.forEach(btn => {
+                const action = btn.getAttribute('onclick');
+                if (!action) return;
+                const triggerAction = () => {
+                    try { new Function(action).call(btn); } catch (e) { console.error("Button Action Error:", e); }
+                };
+
+                btn.addEventListener('touchstart', function (e) {
+                    if (e.cancelable) e.preventDefault();
+                    e.stopPropagation();
+                    btn.classList.add('touch-active');
+                    triggerAction();
+                }, { passive: false });
+
+                const endTouch = () => btn.classList.remove('touch-active');
+                btn.addEventListener('touchend', endTouch);
+                btn.addEventListener('touchcancel', endTouch);
+            });
+            console.log("Multi-Touch Controller Active");
+        })();
+    </script>
+
+<script defer src="https://static.cloudflareinsights.com/beacon.min.js/v8c78df7c7c0f484497ecbca7046644da1771523124516" integrity="sha512-8DS7rgIrAmghBFwoOTujcf6D9rXvH8xm8JQ1Ja01h9QX8EzXldiszufYa4IFfKdLUKTTrnSFXLDkUEOTrZQ8Qg==" data-cf-beacon='{"version":"2024.11.0","token":"cde340b9d98d4725852802ffdeeee353","r":1,"server_timing":{"name":{"cfCacheStatus":true,"cfEdge":true,"cfExtPri":true,"cfL4":true,"cfOrigin":true,"cfSpeedBrain":true},"location_startswith":null}}' crossorigin="anonymous"></script>
+</body>
+</html>
